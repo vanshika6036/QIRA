@@ -1,7 +1,7 @@
 # QIRA - Quantum Integrated Risk Analytics
 **Hybrid Quantum-Classical Machine Learning for Early Disease Detection**
 
-QuantumDx is a prototype that explores the use of **hybrid quantum-classical machine learning** for early disease detection.
+QIRA is a prototype that explores the use of **hybrid quantum-classical machine learning** for early disease detection.
 
 ### Pipeline
 
