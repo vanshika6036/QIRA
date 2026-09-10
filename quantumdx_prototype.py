@@ -1,0 +1,526 @@
+"""
+QuantumDx - Fast Working Prototype
+===================================
+Hybrid Quantum-Classical ML for Early Disease Detection
+SIH26139
+
+Pipeline:
+Real biomedical data
+        ↓
+StandardScaler
+        ↓
+PCA: 30 features -> 4 features
+        ↓
+Angle Encoding
+        ↓
+4-qubit Variational Quantum Classifier
+        ↓
+Prediction
+        ↓
+Compare with Classical Logistic Regression
+
+The quantum model runs locally using PennyLane's default.qubit
+classical simulator.
+
+Designed for a live SIH demonstration.
+"""
+
+import time
+import numpy as np
+import pennylane as qml
+from pennylane import numpy as pnp
+
+from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import (
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score
+)
+
+
+# ===============================================================
+# CONFIGURATION
+# ===============================================================
+
+np.random.seed(42)
+
+N_SAMPLES = 80
+N_QUBITS = 4
+N_LAYERS = 2
+EPOCHS = 10
+
+
+# ===============================================================
+# 1. LOAD REAL BIOMEDICAL DATA
+# ===============================================================
+
+print("=" * 72)
+print("QuantumDx - Hybrid Quantum-Classical Disease Detection")
+print("=" * 72)
+
+print("\n[1/5] Loading real biomedical dataset...")
+
+data = load_breast_cancer()
+
+X = data.data
+y = data.target
+
+print(
+    f"Loaded Breast Cancer Wisconsin dataset: "
+    f"{X.shape[0]} patients, {X.shape[1]} clinical features"
+)
+
+
+# Use a stratified subset for a fast live demonstration
+X, _, y, _ = train_test_split(
+    X,
+    y,
+    train_size=N_SAMPLES,
+    stratify=y,
+    random_state=42
+)
+
+print(f"Using {N_SAMPLES} patients for the live prototype.")
+
+
+# ===============================================================
+# 2. TRAIN / TEST SPLIT
+# ===============================================================
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X,
+    y,
+    test_size=0.30,
+    stratify=y,
+    random_state=42
+)
+
+print(
+    f"Training samples: {len(X_train)} | "
+    f"Test samples: {len(X_test)}"
+)
+
+
+# ===============================================================
+# 3. CLASSICAL PREPROCESSING
+# ===============================================================
+
+print("\n[2/5] Performing classical preprocessing...")
+
+# Standardize the original 30 features
+scaler = StandardScaler()
+
+X_train_s = scaler.fit_transform(X_train)
+X_test_s = scaler.transform(X_test)
+
+
+# ===============================================================
+# 4. PCA DIMENSIONALITY REDUCTION
+# ===============================================================
+
+pca = PCA(n_components=N_QUBITS)
+
+X_train_p = pca.fit_transform(X_train_s)
+X_test_p = pca.transform(X_test_s)
+
+explained_variance = pca.explained_variance_ratio_.sum()
+
+print(
+    f"Reduced {X.shape[1]} features -> "
+    f"{N_QUBITS} features using PCA"
+)
+
+print(
+    f"Variance retained: {explained_variance:.2%}"
+)
+
+
+# ===============================================================
+# 5. SCALE PCA FEATURES FOR QUANTUM ANGLE ENCODING
+# ===============================================================
+
+def angle_scale(X, reference):
+    """
+    Scale each feature into [-pi, pi].
+
+    This allows the classical PCA features to be
+    encoded as quantum rotation angles.
+    """
+
+    lo = reference.min(axis=0)
+    hi = reference.max(axis=0)
+
+    return (
+        (X - lo)
+        / (hi - lo + 1e-9)
+        * (2 * np.pi)
+        - np.pi
+    )
+
+
+X_train_q = angle_scale(
+    X_train_p,
+    X_train_p
+)
+
+X_test_q = angle_scale(
+    X_test_p,
+    X_train_p
+)
+
+
+# ===============================================================
+# 6. CREATE QUANTUM SIMULATOR
+# ===============================================================
+
+print("\n[3/5] Initializing quantum simulator...")
+
+dev = qml.device(
+    "default.qubit",
+    wires=N_QUBITS
+)
+
+
+# ===============================================================
+# 7. DEFINE 4-QUBIT VARIATIONAL CIRCUIT
+# ===============================================================
+
+@qml.qnode(dev)
+def circuit(weights, x):
+
+    # -----------------------------------------------------------
+    # Angle encoding
+    # -----------------------------------------------------------
+
+    for i in range(N_QUBITS):
+        qml.RY(
+            x[i],
+            wires=i
+        )
+
+    # -----------------------------------------------------------
+    # Trainable quantum layers
+    # -----------------------------------------------------------
+
+    for layer in range(N_LAYERS):
+
+        for i in range(N_QUBITS):
+
+            qml.RY(
+                weights[layer, i, 0],
+                wires=i
+            )
+
+            qml.RZ(
+                weights[layer, i, 1],
+                wires=i
+            )
+
+        # Entanglement
+        for i in range(N_QUBITS - 1):
+
+            qml.CNOT(
+                wires=[i, i + 1]
+            )
+
+    # Measurement
+    return qml.expval(
+        qml.PauliZ(0)
+    )
+
+
+# ===============================================================
+# 8. QUANTUM PREDICTION
+# ===============================================================
+
+def predict_proba(weights, bias, x):
+
+    quantum_output = circuit(
+        weights,
+        x
+    )
+
+    # Convert [-1, 1] -> approximately [0, 1]
+    probability = (
+        quantum_output + 1
+    ) / 2
+
+    probability = probability + bias
+
+    return probability
+
+
+# ===============================================================
+# 9. COST FUNCTION
+# ===============================================================
+
+def cost(weights, bias, X, y):
+
+    predictions = pnp.array([
+        predict_proba(
+            weights,
+            bias,
+            x
+        )
+        for x in X
+    ])
+
+    return pnp.mean(
+        (predictions - y) ** 2
+    )
+
+
+# ===============================================================
+# 10. INITIALIZE QUANTUM MODEL
+# ===============================================================
+
+weights = pnp.array(
+    0.1 * np.random.randn(
+        N_LAYERS,
+        N_QUBITS,
+        2
+    ),
+    requires_grad=True
+)
+
+bias = pnp.array(
+    0.0,
+    requires_grad=True
+)
+
+optimizer = qml.AdamOptimizer(
+    stepsize=0.15
+)
+
+
+# ===============================================================
+# 11. TRAIN QUANTUM MODEL
+# ===============================================================
+
+print("\n[4/5] Training 4-qubit VQC...")
+print("Running on local quantum simulator.\n")
+
+start_time = time.time()
+
+for epoch in range(EPOCHS):
+
+    (weights, bias), loss = optimizer.step_and_cost(
+        lambda w, b: cost(
+            w,
+            b,
+            X_train_q,
+            y_train
+        ),
+        weights,
+        bias
+    )
+
+    print(
+        f"  Epoch {epoch + 1:2d}/{EPOCHS} "
+        f"| Loss: {float(loss):.4f}"
+    )
+
+
+quantum_time = time.time() - start_time
+
+print(
+    f"\nQuantum training completed in "
+    f"{quantum_time:.2f} seconds."
+)
+
+
+# ===============================================================
+# 12. QUANTUM MODEL PREDICTIONS
+# ===============================================================
+
+q_test_probabilities = [
+    float(
+        predict_proba(
+            weights,
+            bias,
+            x
+        )
+    )
+    for x in X_test_q
+]
+
+q_test_pred = [
+    1 if probability >= 0.5 else 0
+    for probability in q_test_probabilities
+]
+
+
+# ===============================================================
+# 13. CLASSICAL BASELINE
+# ===============================================================
+
+print("\nTraining classical Logistic Regression...")
+
+classical_start = time.time()
+
+classical_model = LogisticRegression(
+    max_iter=1000
+)
+
+# IMPORTANT:
+# Uses the exact same PCA-reduced features
+# as the quantum model.
+classical_model.fit(
+    X_train_p,
+    y_train
+)
+
+c_test_pred = classical_model.predict(
+    X_test_p
+)
+
+classical_time = time.time() - classical_start
+
+
+# ===============================================================
+# 14. EVALUATION
+# ===============================================================
+
+def evaluate_model(
+    name,
+    y_true,
+    y_pred
+):
+
+    return {
+        "Model": name,
+
+        "Accuracy": accuracy_score(
+            y_true,
+            y_pred
+        ),
+
+        "Precision": precision_score(
+            y_true,
+            y_pred,
+            zero_division=0
+        ),
+
+        "Recall": recall_score(
+            y_true,
+            y_pred,
+            zero_division=0
+        ),
+
+        "F1": f1_score(
+            y_true,
+            y_pred,
+            zero_division=0
+        )
+    }
+
+
+quantum_results = evaluate_model(
+    "Quantum VQC",
+    y_test,
+    q_test_pred
+)
+
+classical_results = evaluate_model(
+    "Classical Logistic Regression",
+    y_test,
+    c_test_pred
+)
+
+
+# ===============================================================
+# 15. DISPLAY RESULTS
+# ===============================================================
+
+print("\n")
+print("=" * 72)
+print("MODEL PERFORMANCE COMPARISON")
+print("=" * 72)
+
+print(
+    f"{'Model':30s}"
+    f"{'Accuracy':>12s}"
+    f"{'Precision':>12s}"
+    f"{'Recall':>12s}"
+    f"{'F1':>10s}"
+)
+
+print("-" * 72)
+
+
+for result in [
+    quantum_results,
+    classical_results
+]:
+
+    print(
+        f"{result['Model']:30s}"
+        f"{result['Accuracy']:11.2%}"
+        f"{result['Precision']:12.2%}"
+        f"{result['Recall']:12.2%}"
+        f"{result['F1']:10.2%}"
+    )
+
+
+print("=" * 72)
+
+
+# ===============================================================
+# 16. TRAINING TIME
+# ===============================================================
+
+print("\nTraining Time:")
+print(
+    f"  Quantum VQC:          {quantum_time:.2f} seconds"
+)
+
+print(
+    f"  Classical Logistic:   {classical_time:.2f} seconds"
+)
+
+
+# ===============================================================
+# 17. PROTOTYPE SUMMARY
+# ===============================================================
+
+print("\n" + "=" * 72)
+print("QUANTUMDX PIPELINE")
+print("=" * 72)
+
+print("""
+Real Breast Cancer Dataset
+          |
+          v
+StandardScaler
+          |
+          v
+PCA: 30 -> 4 Features
+          |
+          v
+Quantum Angle Encoding
+          |
+          v
+4-Qubit Variational Circuit
+          |
+          v
+Disease Classification
+          |
+          v
+Compare Against Classical Logistic Regression
+""")
+
+print("=" * 72)
+
+print(
+    "\nPrototype completed successfully."
+)
+
+print(
+    "The quantum and classical models were trained "
+    "on the same PCA-reduced feature space."
+)
