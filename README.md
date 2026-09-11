@@ -6,9 +6,8 @@ QIRA is a prototype that explores the use of **hybrid quantum-classical machine 
 ### Dashboard
 https://binx53qpj6kzgogz9umh8f.streamlit.app/
 
-### Methidology 
-<img width="1038" height="561" alt="image" src="https://github.com/user-attachments/assets/a3b79199-d04d-4901-b2e9-74d5e0f9cee2" />
-
+### Flowchart
+<img width="1312" height="1199" alt="ChatGPT Image Sep 11, 2026, 08_24_26 PM" src="https://github.com/user-attachments/assets/d451e3d1-6cff-4554-918c-025843bd3ff3" />
 
 ### Pipeline
 
