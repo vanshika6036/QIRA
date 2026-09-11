@@ -3,6 +3,9 @@
 
 QIRA is a prototype that explores the use of **hybrid quantum-classical machine learning** for early disease detection.
 
+### Dashboard
+https://binx53qpj6kzgogz9umh8f.streamlit.app/
+
 ### Pipeline
 
 ```text
