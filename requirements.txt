@@ -1,0 +1,7 @@
+streamlit>=1.36
+numpy>=1.26
+pandas>=2.2
+scikit-learn>=1.4
+pennylane>=0.36
+plotly>=5.22
+xgboost>=2.0
