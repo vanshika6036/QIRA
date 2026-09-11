@@ -44,4 +44,4 @@ The current prototype uses the **Breast Cancer Wisconsin dataset** to demonstrat
 * Model explainability
 * Support for additional biomedical datasets
 
-> **Note:** QuantumDx is a research/prototype project and is not intended for clinical diagnosis.
+> **Note:** QIRA is a research/prototype project and is not intended for clinical diagnosis.
