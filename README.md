@@ -1,10 +1,14 @@
-# QIRA - Quantum Integrated Risk Analytics
-**Hybrid Quantum-Classical Machine Learning for Early Disease Detection**
+SIH26139 : **Hybrid Quantum-Classical Machine Learning for Early Disease Detection**
 
+# QIRA - Quantum Integrated Risk Analytics
 QIRA is a prototype that explores the use of **hybrid quantum-classical machine learning** for early disease detection.
 
 ### Dashboard
 https://binx53qpj6kzgogz9umh8f.streamlit.app/
+
+### Methidology 
+<img width="1038" height="561" alt="image" src="https://github.com/user-attachments/assets/a3b79199-d04d-4901-b2e9-74d5e0f9cee2" />
+
 
 ### Pipeline
 
